@@ -91,18 +91,26 @@ class ModelIMU:
         Returns:
             x_nom_pred: predicted nominal state
         """
-        pos_pred = np.zeros(3)  # TODO
-        vel_pred = np.zeros(3)  # TODO
+        
+        pos_pred = x_est_nom.pos + dt * x_est_nom.vel + 0.5 * dt**2 * (x_est_nom.ori.as_rotmat() @ z_corr.acc + self.g)
+        vel_pred = x_est_nom.vel + dt * (x_est_nom.ori.as_rotmat() @ z_corr.acc+self.g)  
 
-        delta_rot = RotationQuaterion(1, np.zeros(3))  # TODO
-        ori_pred = np.zeros(3)  # TODO
+        delta_rot = RotationQuaterion.from_avec(z_corr.avel * dt)
 
-        acc_bias_pred = np.zeros(3)  # TODO
-        gyro_bias_pred = np.zeros(3)  # TODO
+        ori_pred = x_est_nom.ori @ delta_rot
 
-        # TODO remove this
-        x_nom_pred = models_solu.ModelIMU.predict_nom(
-            self, x_est_nom, z_corr, dt)
+        acc_bias_pred  = x_est_nom.accm_bias  * (1 - self.accm_bias_p * dt)
+        gyro_bias_pred = x_est_nom.gyro_bias * (1 - self.gyro_bias_p * dt)
+        
+
+        x_nom_pred = NominalState(
+            pos_pred,
+            vel_pred,
+            ori_pred,
+            acc_bias_pred,
+            gyro_bias_pred
+        )
+       
         return x_nom_pred
 
     def A_c(self,

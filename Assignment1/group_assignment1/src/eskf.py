@@ -41,6 +41,8 @@ class ESKF():
             # TODO remove this
             x_est_prev = eskf_solu.ESKF.predict_from_imu(
                 self, x_est_prev, z_imu, dt)
+            
+            x_est_prev
             return x_est_prev
 
         x_est_prev_nom = x_est_prev.nom

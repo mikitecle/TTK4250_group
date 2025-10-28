@@ -56,6 +56,5 @@ class SensorGNSS:
         z_pred = GnssMeasurement.from_array(z_pred)
         z_gnss_pred_gauss = MultiVarGauss[GnssMeasurement](z_pred, S)
 
-        # TODO remove this
-        # z_gnss_pred_gauss = sensors_solu.SensorGNSS.pred_from_est(self, x_est)
+
         return z_gnss_pred_gauss

@@ -38,21 +38,16 @@ class ESKF():
         """
         if dt == 0:
 
-            # TODO remove this
-            x_est_prev = eskf_solu.ESKF.predict_from_imu(
-                self, x_est_prev, z_imu, dt)
+            
             return x_est_prev
 
         x_est_prev_nom = x_est_prev.nom
-        z_corr = None  # TODO
-        x_est_pred_nom = None  # TODO
-        x_est_pred_err = None  # TODO
+        z_corr = self.model.correct_z_imu(x_est_prev_nom, z_imu)
+        x_est_pred_nom = self.model.predict_nom( x_est_prev_nom, z_corr, dt)
+        x_est_pred_err = self.model.predict_err(x_est_prev, z_corr, dt)
 
         x_est_pred = EskfState(x_est_pred_nom, x_est_pred_err)
 
-        # TODO remove this
-        x_est_pred = eskf_solu.ESKF.predict_from_imu(
-            self, x_est_prev, z_imu, dt)
         return x_est_pred
 
     def update_err_from_gnss(self,
@@ -84,21 +79,20 @@ class ESKF():
         x_err = x_est_pred.err
         z_pred, S = z_est_pred
 
-        innovation = None  # TODO
-        H = None  # TODO
-        P = None  # TODO
-        R = None  # TODO
-        W = None  # TODO
-        x_err_upd = np.zeros(15)  # TODO
-        I_WH = None  # TODO
-        x_err_cov_upd = np.eye(15)  # TODO
+        innovation = z_gnss.as_array() - z_pred.mean().as_array()
+
+        H = self.sensor.H(x_nom)
+        P = x_err.cov
+        R = self.sensor.R
+        W = P @ np.linalg.solve(S, H).T
+
+        x_err_upd = W @ innovation
+        I_WH = np.eye(*P.shape) - W @ H
+        x_err_cov_upd = (I_WH @ P @ I_WH.T + W @ R @ W.T)
 
         x_err_upd = ErrorState.from_array(x_err_upd)
         x_est_upd_err = MultiVarGauss[ErrorState](x_err_upd, x_err_cov_upd)
 
-        # TODO remove this
-        x_est_upd_err = eskf_solu.ESKF.update_err_from_gnss(
-            self, x_est_pred, z_est_pred, z_gnss)
         return x_est_upd_err
 
     def inject(self,

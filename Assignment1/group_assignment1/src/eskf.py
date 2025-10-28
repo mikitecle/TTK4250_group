@@ -115,10 +115,7 @@ class ESKF():
         """
         pos_inj = x_est_nom.pos + x_est_err.mean.pos
         vel_inj = x_est_nom.vel + x_est_err.mean.vel
-        delta_angle = x_est_err.mean.avec
-        delta_q = RotationQuaterion(1.0, 0.5 * delta_angle)
-
-        # Inject attitude (local perturbation): q_inj = q ⊗ δq
+        delta_q = RotationQuaterion(1.0, 0.5 * x_est_err.mean.avec)
         ori_inj = x_est_nom.ori.multiply(delta_q)
         accm_bias_inj = x_est_nom.accm_bias + x_est_err.mean.accm_bias
         gyro_bias_inj = x_est_nom.gyro_bias + x_est_err.mean.gyro_bias
@@ -153,12 +150,9 @@ class ESKF():
             z_est_upd: predicted measurement gaussian
 
         """
-        z_est_pred = None  # TODO
-        x_est_upd_err = None  # TODO
-        x_est_upd = None  # TODO
+        z_est_pred = self.sensor.pred_from_est(x_est_pred)
+        x_est_upd_err = self.update_err_from_gnss(x_est_pred,z_est_pred, z_gnss)
+        x_est_upd = self.inject(x_est_pred.nom, x_est_upd_err)
 
-        # TODO remove this
-        x_est_upd, z_est_pred = eskf_solu.ESKF.update_from_gnss(
-            self, x_est_pred, z_gnss)
 
         return x_est_upd, z_est_pred

@@ -79,12 +79,15 @@ class ESKF():
         x_err = x_est_pred.err
         z_pred, S = z_est_pred
 
-        innovation = z_gnss.as_array() - z_pred.mean().as_array()
+        innovation = np.asarray(z_gnss) - np.asarray(z_pred)
 
         H = self.sensor.H(x_nom)
         P = x_err.cov
         R = self.sensor.R
-        W = P @ np.linalg.solve(S, H).T
+        S_inv_H_T = np.linalg.solve(S, H).T
+
+        W = P @ S_inv_H_T
+        print("W:", W)
 
         x_err_upd = W @ innovation
         I_WH = np.eye(*P.shape) - W @ H

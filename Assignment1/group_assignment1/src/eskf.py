@@ -37,11 +37,11 @@ class ESKF():
             x_est_pred: predicted eskf state
         """
         if dt == 0:
-            x_est_prev = x_est_prev.get_err_gauss(x_est_prev.nom)
+     
             return x_est_prev
 
         x_est_prev_nom = x_est_prev.nom
-        z_corr = self.model.correct_z_imu(z_imu, x_est_prev_nom)
+        z_corr = self.model.correct_z_imu(x_est_prev_nom, z_imu)
         x_est_pred_nom = self.model.predict_nom(x_est_prev_nom, z_corr, dt)
         x_est_pred_err = self.model.get_discrete_error_diff(x_est_prev_nom, z_corr, dt)
 

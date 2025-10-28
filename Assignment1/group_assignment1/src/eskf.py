@@ -87,7 +87,6 @@ class ESKF():
         S_inv_H_T = np.linalg.solve(S, H).T
 
         W = P @ S_inv_H_T
-        print("W:", W)
 
         x_err_upd = W @ innovation
         I_WH = np.eye(*P.shape) - W @ H
@@ -114,21 +113,26 @@ class ESKF():
         Returns:
             x_est_inj: eskf state after injection
         """
-        pos_inj = np.zeros(3)
-        vel_inj = np.zeros(3)
-        ori_inj = RotationQuaterion(1, np.zeros(3))
-        accm_bias_inj = np.zeros(3)
-        gyro_bias_inj = np.zeros(3)
+        pos_inj = x_est_nom.pos + x_est_err.mean.pos
+        vel_inj = x_est_nom.vel + x_est_err.mean.vel
+        delta_angle = x_est_err.mean.avec
+        delta_q = RotationQuaterion(1.0, 0.5 * delta_angle)
+
+        # Inject attitude (local perturbation): q_inj = q ⊗ δq
+        ori_inj = x_est_nom.ori.multiply(delta_q)
+        accm_bias_inj = x_est_nom.accm_bias + x_est_err.mean.accm_bias
+        gyro_bias_inj = x_est_nom.gyro_bias + x_est_err.mean.gyro_bias
 
         x_nom_inj = NominalState(pos_inj, vel_inj, ori_inj,
                                  accm_bias_inj, gyro_bias_inj)
 
-        P_inj = np.eye(15)
+        G_theta =np.eye(3) -  0.5* get_cross_matrix(x_est_err.mean.avec)
+        G = scipy.linalg.block_diag(np.eye(3), np.eye(3), G_theta, np.eye(3), np.eye(3))  # 15x15
+
+        P_inj = G @ x_est_err.cov @ G.T
         x_err_inj = MultiVarGauss[ErrorState](np.zeros(15), P_inj)
         x_est_inj = EskfState(x_nom_inj, x_err_inj)
 
-        # TODO remove this
-        x_est_inj = eskf_solu.ESKF.inject(self, x_est_nom, x_est_err)
         return x_est_inj
 
     def update_from_gnss(self,

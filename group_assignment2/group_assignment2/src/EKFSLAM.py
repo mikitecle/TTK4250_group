@@ -57,13 +57,13 @@ class EKFSLAM:
         np.ndarray
             The Jacobian of f wrt. x.
         """
-        # TODO replace this with your own code
-        Fx = solution.EKFSLAM.EKFSLAM.Fx(self, x, u)
+        Fx = np.block([
+            [1, 0, -u[0]*np.sin(x[2]) - u[1]*np.cos(x[2])],
+            [0, 1, u[0]*np.cos(x[2]) - u[1]*np.sin(x[2])],
+            [0, 0, 1]
+        ])
         return Fx
 
-        Fx = None  # TODO, eq (11.13)
-
-        return Fx
 
     def Fu(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
         """Calculate the Jacobian of f with respect to u.
@@ -80,13 +80,14 @@ class EKFSLAM:
         np.ndarray
             The Jacobian of f wrt. u.
         """
-        # TODO replace this with your own code
-        Fu = solution.EKFSLAM.EKFSLAM.Fu(self, x, u)
+        Fu = np.block([
+            [np.cos(x[2]), -np.sin(x[2]), 0],
+            [np.sin(x[2]), np.cos(x[2]), 0],
+            [0, 0, 1]
+        ])
         return Fu
 
-        Fu = None  # TODO, eq (11.14)
 
-        return Fu
 
     def predict(
         self, eta: np.ndarray, P: np.ndarray, z_odo: np.ndarray
@@ -107,44 +108,25 @@ class EKFSLAM:
         Tuple[np.ndarray, np.ndarray], shapes= (3 + 2*#landmarks,), (3 + 2*#landmarks,)*2
             predicted mean and covariance of eta.
         """
-        etapred, P = solution.EKFSLAM.EKFSLAM.predict(self, eta, P, z_odo)
+        M = np.zeros((eta.shape[0], 3 ), dtype=float)
+        M[:3, :] = np.eye(3)
+        F_x = self.Fx(eta[:3], z_odo)
+        F = np.block([[F_x, np.zeros((F_x.shape[0], eta.shape[0]-3))],
+                      [np.zeros((eta.shape[0]-3, F_x.shape[1])), np.eye(eta.shape[0]-3)]])
+        
+        xpred = self.f(eta[:3], z_odo)
+        etapred = eta.copy()
+        etapred[:3] = xpred
+
+        Pxx_old = P[:3, :3].copy()          # pose–pose
+        PxL_old = P[:3, 3:].copy()          # pose–landmarks
+
+        P[:3, :3] = F_x @ Pxx_old @ F_x.T + self.Q
+
+        P[:3, 3:] = F_x @ PxL_old
+        P[3:, :3] = P[:3, 3:].T
         return etapred, P
 
-        # check inout matrix
-        assert np.allclose(P, P.T), "EKFSLAM.predict: not symmetric P input"
-        assert np.all(
-            np.linalg.eigvals(P) >= 0
-        ), "EKFSLAM.predict: non-positive eigen values in P input"
-        assert (
-            eta.shape * 2 == P.shape
-        ), "EKFSLAM.predict: input eta and P shape do not match"
-        etapred = np.empty_like(eta)
-
-        x = eta[:3]
-        etapred[:3] = None  # TODO robot state prediction
-        etapred[3:] = None  # TODO landmarks: no effect
-
-        Fx = None  # TODO
-        Fu = None  # TODO
-
-        # evaluate covariance prediction in place to save computation
-        # only robot state changes, so only rows and colums of robot state needs changing
-        # cov matrix layout:
-        # [[P_xx, P_xm],
-        # [P_mx, P_mm]]
-        P[:3, :3] = None  # TODO robot cov prediction
-        P[:3, 3:] = None  # TODO robot-map covariance prediction
-        P[3:, :3] = None  # TODO map-robot covariance: transpose of the above
-
-        assert np.allclose(P, P.T), "EKFSLAM.predict: not symmetric P"
-        assert np.all(
-            np.linalg.eigvals(P) > 0
-        ), "EKFSLAM.predict: non-positive eigen values"
-        assert (
-            etapred.shape * 2 == P.shape
-        ), "EKFSLAM.predict: calculated shapes does not match"
-
-        return etapred, P
 
     def h(self, eta: np.ndarray) -> np.ndarray:
         """Predict all the landmark positions in sensor frame.

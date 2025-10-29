@@ -1,3 +1,4 @@
+from cmath import sin
 from typing import Tuple
 import numpy as np
 from numpy import ndarray
@@ -19,7 +20,7 @@ class EKFSLAM:
     sensor_offset: 'ndarray[2]' = field(default=np.zeros(2))
 
     def f(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
-        """Add the odometry u to the robot state x.
+        """Add the odometr to the robot state x.
 
         Parameters
         ----------
@@ -33,8 +34,11 @@ class EKFSLAM:
         np.ndarray, shape = (3,)
             the predicted state
         """
-        # TODO replace this with your own code
-        xpred = solution.EKFSLAM.EKFSLAM.f(self, x, u)
+        xpred = np.array(size=3)
+        xpred[0] = x[0] + u[0] *np.cos(x[2]) - u[1]*np.sin(x[2])
+        xpred[1] = x[1] + u[0] *np.sin(x[2]) + u[1]*np.cos(x[2])
+        xpred[2] = x[2] + u[2]
+        xpred[2] = utils.wrapToPi(xpred[2])
         return xpred
 
         # TODO, eq (11.7). Should wrap heading angle between (-pi, pi), see utils.wrapToPi

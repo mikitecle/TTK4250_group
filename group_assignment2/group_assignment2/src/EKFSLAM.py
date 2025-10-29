@@ -34,17 +34,13 @@ class EKFSLAM:
         np.ndarray, shape = (3,)
             the predicted state
         """
-        xpred = np.array(size=3)
+        xpred = np.empty(3, dtype=float)
         xpred[0] = x[0] + u[0] *np.cos(x[2]) - u[1]*np.sin(x[2])
         xpred[1] = x[1] + u[0] *np.sin(x[2]) + u[1]*np.cos(x[2])
         xpred[2] = x[2] + u[2]
         xpred[2] = utils.wrapToPi(xpred[2])
         return xpred
 
-        # TODO, eq (11.7). Should wrap heading angle between (-pi, pi), see utils.wrapToPi
-        xpred = None
-
-        return xpred
 
     def Fx(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
         """Calculate the Jacobian of f with respect to x.

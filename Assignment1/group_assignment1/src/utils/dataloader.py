@@ -53,7 +53,7 @@ def load_data(file_name: Path):
 def load_drone_params(file_name: Path):
     loaded_data = loadmat(file_name)
 
-    S_a = loaded_data["S_a"]  # accm_correction
-    S_g = loaded_data["S_g"]  # gyro_correction
+    S_a = np.round(loaded_data["S_a"])  # accm_correction
+    S_g = np.round(loaded_data["S_g"])  # gyro_correction
     lever_arm = loaded_data["leverarm"].ravel()
     return S_a, S_g, lever_arm

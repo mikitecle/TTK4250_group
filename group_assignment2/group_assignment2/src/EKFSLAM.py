@@ -118,9 +118,8 @@ class EKFSLAM:
         etapred = eta.copy()
         etapred[:3] = xpred
 
-        P0 = P.copy()
-        P_pred = F @ P0 @ F.T + M @ self.Q @ M.T
-        return etapred, P_pred
+        P[:, :] = F @ P @ F.T + M @ self.Q @ M.T
+        return etapred, P
 
 
     def h(self, eta: np.ndarray) -> np.ndarray:
@@ -138,7 +137,13 @@ class EKFSLAM:
         """
 
         # TODO replace this with your own code
-        zpred = solution.EKFSLAM.EKFSLAM.h(self, eta)
+        zpred = []
+        offset = rotmat2d(eta[2]) @ self.sensor_offset
+        for i in range(3, len(eta), 2):
+            zpred_0 = np.sqrt((eta[i:i+1]-eta[0]-offset[0])**2+(eta[i+1:i+2]-eta[1]-offset[1])**2)
+            zpred_1 = rotmat2d(-eta[2])@(eta[i:i+2]-eta[0:2])
+            zpred.append(np.hstack((zpred_0, [zpred_1])))
+        zpred = np.hstack(zpred) if zpred else np.array([], dtype=float)
         return zpred
 
         # extract states and map

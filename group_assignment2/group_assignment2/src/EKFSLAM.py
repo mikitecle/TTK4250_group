@@ -118,14 +118,9 @@ class EKFSLAM:
         etapred = eta.copy()
         etapred[:3] = xpred
 
-        Pxx_old = P[:3, :3].copy()          # pose–pose
-        PxL_old = P[:3, 3:].copy()          # pose–landmarks
-
-        P[:3, :3] = F_x @ Pxx_old @ F_x.T + self.Q
-
-        P[:3, 3:] = F_x @ PxL_old
-        P[3:, :3] = P[:3, 3:].T
-        return etapred, P
+        P0 = P.copy()
+        P_pred = F @ P0 @ F.T + M @ self.Q @ M.T
+        return etapred, P_pred
 
 
     def h(self, eta: np.ndarray) -> np.ndarray:

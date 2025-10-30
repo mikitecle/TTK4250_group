@@ -140,9 +140,10 @@ class EKFSLAM:
         offset = rotmat2d(eta[2]) @ self.sensor_offset
         for i in range(3, len(eta), 2):
             zpred_0 = np.sqrt((eta[i:i+1]-eta[0]-offset[0])**2+(eta[i+1:i+2]-eta[1]-offset[1])**2)
-            zpred_1 = rotmat2d(-eta[2])@(eta[i:i+2]-eta[0:2])
+            zpred_1 = rotmat2d(-eta[2])@(eta[i:i+2]-eta[0:2]-offset)
+            zpred_1 = np.arctan2(zpred_1[1], zpred_1[0])
             zpred.append(np.hstack((zpred_0, [zpred_1])))
-        zpred = np.hstack(zpred) if zpred else np.array([], dtype=float)
+        zpred = np.hstack(zpred) 
         return zpred
 
     

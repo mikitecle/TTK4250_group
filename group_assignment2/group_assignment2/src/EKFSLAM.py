@@ -254,9 +254,61 @@ class EKFSLAM:
         Tuple[np.ndarray, np.ndarray], shapes=(3 + 2*(#landmarks + #newlandmarks,), (3 + 2*(#landmarks + #newlandmarks,)*2
             eta with new landmarks appended, and its covariance
         """
-        # TODO replace this with your own code
-        etaadded, Padded = solution.EKFSLAM.EKFSLAM.add_landmarks(
-            self, eta, P, z)
+        n = P.shape[0]
+
+        numLmk = z.shape[0] // 2
+        lmnew = np.empty_like(z)  
+
+        Gx = np.empty((2 * numLmk, 3))
+        Rall = np.zeros((2 * numLmk, 2 * numLmk))
+
+        rho = eta[:2]
+        psi = eta[2]
+        Rpsi = rotmat2d(psi)
+        Rpihalf = rotmat2d(np.pi / 2)
+
+        sensor_offset_world = Rpsi @ self.sensor_offset
+        sensor_offset_world_der = rotmat2d(psi + np.pi / 2) @ self.sensor_offset
+
+        for j in range(numLmk):
+            ind = 2 * j
+            inds = slice(ind, ind + 2)
+            r, phi = z[inds]
+
+            s_body = np.array([r * np.cos(phi), r * np.sin(phi)])           
+            s_world = Rpsi @ s_body                                         
+            lm = rho + s_world + sensor_offset_world                        
+            lmnew[inds] = lm
+
+            Gx[inds, :2] = np.eye(2)
+            dpsi = r * np.array([-np.sin(phi + psi), np.cos(phi + psi)]) + sensor_offset_world_der
+            Gx[inds, 2] = dpsi                                              
+
+            
+            rot = rotmat2d(phi + psi)
+            Gz = rot @ np.diag([1.0, r])
+
+
+            Rall[inds, inds] = Gz @ self.R @ Gz.T
+
+        
+        etaadded = np.concatenate([eta, lmnew])
+
+        
+        Padded = np.zeros((n + 2 * numLmk, n + 2 * numLmk))
+        Padded[:n, :n] = P
+
+        Px_all = P[:3, :]          
+        P_allx = P[:, :3]          
+        P_xx  = P[:3, :3]          
+
+        
+        Padded[n:, :n] = Gx @ Px_all
+        Padded[:n, n:] = P_allx @ Gx.T 
+
+        Padded[n:, n:] = Gx @ P_xx @ Gx.T + Rall
+
+
         return etaadded, Padded
 
         n = P.shape[0]

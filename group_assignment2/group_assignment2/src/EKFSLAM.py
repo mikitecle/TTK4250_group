@@ -136,7 +136,6 @@ class EKFSLAM:
             The landmarks in the sensor frame.
         """
 
-        # TODO replace this with your own code
         zpred = []
         offset = rotmat2d(eta[2]) @ self.sensor_offset
         for i in range(3, len(eta), 2):
@@ -146,35 +145,7 @@ class EKFSLAM:
         zpred = np.hstack(zpred) if zpred else np.array([], dtype=float)
         return zpred
 
-        # extract states and map
-        x = eta[0:3]
-        # reshape map (2, #landmarks), m[:, j] is the jth landmark
-        m = eta[3:].reshape((-1, 2)).T
-
-        Rot = rotmat2d(-x[2])
-
-        # None as index ads an axis with size 1 at that position.
-        # Numpy broadcasts size 1 dimensions to any size when needed
-        delta_m = None  # TODO, relative position of landmark to sensor on robot in world frame
-
-        # TODO, predicted measurements in cartesian coordinates, beware sensor offset for VP
-        zpredcart = None
-
-        zpred_r = None  # TODO, ranges
-        zpred_theta = None  # TODO, bearings
-        zpred = None  # TODO, the two arrays above stacked on top of each other vertically like
-        # [ranges;
-        #  bearings]
-        # into shape (2, #lmrk)
-
-        # stack measurements along one dimension, [range1 bearing1 range2 bearing2 ...]
-        zpred = zpred.T.ravel()
-
-        assert (
-            zpred.ndim == 1 and zpred.shape[0] == eta.shape[0] - 3
-        ), "SLAM.h: Wrong shape on zpred"
-
-        return zpred
+    
 
     def h_jac(self, eta: np.ndarray) -> np.ndarray:
         """Calculate the jacobian of h.
@@ -189,6 +160,21 @@ class EKFSLAM:
         np.ndarray, shape=(2 * #landmarks, 3 + 2 * #landmarks)
             the jacobian of h wrt. eta.
         """
+        H_x = []
+        H_m = []
+        offset = rotmat2d(eta[2]) @ self.sensor_offset
+        for i in range(3, len(eta), 2):
+            z_c = eta[i:i+2] - eta[:2] - offset
+            z_c_abs = np.sqrt(eta[i:i+2]**2 - eta[:2]**2 - offset**2)
+            z_b_0 = z_c.T/z_c_abs@ np.block([np.eye(2), -rotmat2d(np.pi/2) @ (eta[i:i+2]-eta[:2])])
+            z_b_1 = z_c.T@rotmat2d(np.pi/2).T/z_c_abs**2 @ np.block([np.eye(2), -rotmat2d(np.pi/2) @ (eta[i:i+2]-eta[:2])])
+            H_x.append(np.block([z_b_0, 0, z_b_1, 1]))
+
+            z_m_0 = np.sqrt((eta[i:i+1]**2-eta[0]**2-offset[0]**2)@(eta[i+1:i+2]-eta[1]-offset[1]).T)
+            z_m_1 = (eta[i:i+2]-eta[0:2]-offset).T@rotmat2d(np.pi/2).T
+            scale = np.sqrt(eta[i:i+2]**2-eta[0:2]**2-offset**2)**2
+            H_m.append(np.vstack((z_m_0, z_m_1))*1/scale)
+
         H = solution.EKFSLAM.EKFSLAM.h_jac(self, eta)
         return H
 

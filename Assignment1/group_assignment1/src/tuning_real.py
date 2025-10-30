@@ -14,7 +14,7 @@ start_time_real = 200.  # Start time, set to None for full time
 end_time_real = 600  # End time in seconds, set to None to use all data
 
 imu_min_dt_real = None  # IMU is sampled at ~250 Hz, use to downsample
-gnss_min_dt_real = None  # GPS is sampled at ~10 Hz, use this to downsample
+gnss_min_dt_real = 0.01  # GPS is sampled at ~10 Hz, use this to downsample
 
 imu_real = ModelIMU(
     accm_std=1.167e-3,  # Accelerometer standard deviation, TUNABE

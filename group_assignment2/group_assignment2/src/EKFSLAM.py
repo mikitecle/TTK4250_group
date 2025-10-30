@@ -161,22 +161,30 @@ class EKFSLAM:
         np.ndarray, shape=(2 * #landmarks, 3 + 2 * #landmarks)
             the jacobian of h wrt. eta.
         """
-        H_x = []
-        H_m = []
+
+        m = eta[3:].reshape((-1, 2))   
+        numM = m.shape[0]
+
+        H = np.zeros((2 * numM, 3 + 2 * numM))
         offset = rotmat2d(eta[2]) @ self.sensor_offset
-        for i in range(3, len(eta), 2):
-            z_c = eta[i:i+2] - eta[:2] - offset
-            z_c_abs = np.sqrt(eta[i:i+2]**2 - eta[:2]**2 - offset**2)
-            z_b_0 = z_c.T/z_c_abs@ np.block([np.eye(2), -rotmat2d(np.pi/2) @ (eta[i:i+2]-eta[:2])])
-            z_b_1 = z_c.T@rotmat2d(np.pi/2).T/z_c_abs**2 @ np.block([np.eye(2), -rotmat2d(np.pi/2) @ (eta[i:i+2]-eta[:2])])
-            H_x.append(np.block([z_b_0, 0, z_b_1, 1]))
 
-            z_m_0 = np.sqrt((eta[i:i+1]**2-eta[0]**2-offset[0]**2)@(eta[i+1:i+2]-eta[1]-offset[1]).T)
-            z_m_1 = (eta[i:i+2]-eta[0:2]-offset).T@rotmat2d(np.pi/2).T
-            scale = np.sqrt(eta[i:i+2]**2-eta[0:2]**2-offset**2)**2
-            H_m.append(np.vstack((z_m_0, z_m_1))*1/scale)
+        for i in range(numM):   
+            z_c = m[i] - eta[:2] - offset
 
-        H = solution.EKFSLAM.EKFSLAM.h_jac(self, eta)
+            z_b_0 = (z_c.T/np.linalg.norm(z_c))@ np.column_stack((-np.eye(2), -rotmat2d(np.pi/2) @ (m[i]-eta[:2])))
+            z_b_1 = z_c.T@rotmat2d(np.pi/2).T/np.linalg.norm(z_c)**2 @ np.column_stack((-np.eye(2), -rotmat2d(np.pi/2) @ (m[i]-eta[:2])))
+            
+            H_x = np.vstack([z_b_0, z_b_1])  
+
+            z_m_0 = z_c.T/np.linalg.norm(z_c)
+            z_m_1 = z_c.T@rotmat2d(np.pi/2).T/np.linalg.norm(z_c)**2
+            H_m = np.vstack([z_m_0, z_m_1])
+
+            row = 2*i
+            col = 3 + 2*i
+            H[row:row+2, :3] = H_x
+            H[row:row+2, col:col+2] = H_m
+
         return H
 
         # extract states and map

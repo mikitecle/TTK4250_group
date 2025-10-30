@@ -264,10 +264,8 @@ class EKFSLAM:
 
         rho = eta[:2]
         psi = eta[2]
-        Rpsi = rotmat2d(psi)
-        Rpihalf = rotmat2d(np.pi / 2)
 
-        sensor_offset_world = Rpsi @ self.sensor_offset
+        sensor_offset_world = rotmat2d(psi) @ self.sensor_offset
         sensor_offset_world_der = rotmat2d(psi + np.pi / 2) @ self.sensor_offset
 
         for j in range(numLmk):
@@ -276,7 +274,7 @@ class EKFSLAM:
             r, phi = z[inds]
 
             s_body = np.array([r * np.cos(phi), r * np.sin(phi)])           
-            s_world = Rpsi @ s_body                                         
+            s_world = rotmat2d(psi) @ s_body                                         
             lm = rho + s_world + sensor_offset_world                        
             lmnew[inds] = lm
 
@@ -437,68 +435,75 @@ class EKFSLAM:
         Tuple[np.ndarray, np.ndarray, float, np.ndarray]
             updated eta, updated P, NIS, and the associations
         """
-        # TODO replace this with your own code
-        etaupd, Pupd, NIS, a = solution.EKFSLAM.EKFSLAM.update(self, eta, P, z)
-        return etaupd, Pupd, NIS, a
 
         numLmk = (eta.size - 3) // 2
-        assert (len(eta) - 3) % 2 == 0, "EKFSLAM.update: landmark lenght not even"
 
         if numLmk > 0:
-            # Prediction and innovation covariance
-            zpred = None  # TODO
-            H = None  # TODO
+            # Predict measurements and Jacobian
+            zpred = self.h(eta)                 # shape (2*numLmk,)
+            H = self.h_jac(eta) 
 
             # Here you can use simply np.kron (a bit slow) to form the big (very big in VP after a while) R,
             # or be smart with indexing and broadcasting (3d indexing into 2d mat) realizing you are adding the same R on all diagonals
-            S = None  # TODO,
-            assert (
-                S.shape == zpred.shape * 2
-            ), "EKFSLAM.update: wrong shape on either S or zpred"
-            z = z.ravel()  # 2D -> flat
+            S = H @ P @ H.T
 
-            # Perform data association
+            # Now add R to each 2x2 diagonal block
+            n_lmk = numLmk
+            r_dim = self.R.shape[0]  # = 2
+            idx = np.arange(n_lmk) * r_dim
+
+            # Efficiently add self.R to each 2×2 diagonal block
+            S[idx[:, None] + np.arange(r_dim), idx[None, :] + np.arange(r_dim)] += self.R
+            assert S.shape == zpred.shape * 2, "EKFSLAM.update: wrong shape on either S or zpred"
+
+            # Flatten incoming detections
+            z = z.ravel()
+
+            # Data association → keep only associated pieces
             za, zpred, Ha, Sa, a = self.associate(z, zpred, H, S)
 
-            # No association could be made, so skip update
+            # If nothing associated, skip update
             if za.shape[0] == 0:
                 etaupd = eta
                 Pupd = P
-                NIS = 1  # TODO: beware this one when analysing consistency.
+                NIS = 1.0  # placeholder for consistency analysis
             else:
-                # Create the associated innovation
-                v = za.ravel() - zpred  # za: 2D -> flat
+                # Innovation
+                v = za.ravel() - zpred                # (2*k,)
                 v[1::2] = utils.wrapToPi(v[1::2])
 
-                # Kalman mean update
-                # S_cho_factors = la.cho_factor(Sa) # Optional, used in places for S^-1, see scipy.linalg.cho_factor and scipy.linalg.cho_solve
-                W = None  # TODO, Kalman gain, can use S_cho_factors
-                etaupd = None  # TODO, Kalman update
+                # Kalman gain (solve Sa * X = (Ha P)^T)
+                # W = P Ha^T Sa^{-1}
+                W = P @ Ha.T @ np.linalg.solve(Sa, np.eye(Sa.shape[0]))
 
-                # Kalman cov update: use Joseph form for stability
+                # Mean update
+                etaupd = eta + W @ v
+
+                # Joseph-form covariance: P' = (I-KH)P(I-KH)^T + K R_a K^T
                 jo = -W @ Ha
-                # same as adding Identity mat
-                jo[np.diag_indices(jo.shape[0])] += 1
-                Pupd = None  # TODO, Kalman update. This is the main workload on VP after speedups
+                jo[np.diag_indices(jo.shape[0])] += 1.0
 
-                # calculate NIS, can use S_cho_factors
-                NIS = None  # TODO
+                # Build R_a = blkdiag(self.R, ..., self.R) for the k associated measurements
+                k = za.size // 2
+                R_a = np.kron(np.eye(k), self.R)
 
-                # When tested, remove for speed
-                assert np.allclose(
-                    Pupd, Pupd.T), "EKFSLAM.update: Pupd not symmetric"
-                assert np.all(
-                    np.linalg.eigvals(Pupd) > 0
-                ), "EKFSLAM.update: Pupd not positive definite"
+                Pupd = jo @ P @ jo.T + W @ R_a @ W.T
 
-        else:  # All measurements are new landmarks,
+                # NIS = v^T S^{-1} v
+                NIS = float(v.T @ np.linalg.solve(Sa, v))
+
+                assert np.allclose(Pupd, Pupd.T), "EKFSLAM.update: Pupd not symmetric"
+                assert np.all(np.linalg.eigvals(Pupd) > 0), "EKFSLAM.update: Pupd not positive definite"
+
+        else:
+            # No landmarks yet → all detections will be new
             a = np.full(z.shape[0], -1)
             z = z.flatten()
-            NIS = 1  # TODO: beware this one when analysing consistency.
+            NIS = 1.0
             etaupd = eta
             Pupd = P
 
-        # Create new landmarks if any is available
+        # Add any new landmarks (a == -1)
         if self.do_asso:
             is_new_lmk = a == -1
             if np.any(is_new_lmk):
@@ -506,14 +511,14 @@ class EKFSLAM:
                 z_new_inds[::2] = is_new_lmk
                 z_new_inds[1::2] = is_new_lmk
                 z_new = z[z_new_inds]
-                etaupd, Pupd = None  # TODO, add new landmarks.
+                etaupd, Pupd = self.add_landmarks(etaupd, Pupd, z_new)
 
-        assert np.allclose(
-            Pupd, Pupd.T), "EKFSLAM.update: Pupd must be symmetric"
-        assert np.all(np.linalg.eigvals(Pupd) >=
-                      0), "EKFSLAM.update: Pupd must be PSD"
+        assert np.allclose(Pupd, Pupd.T), "EKFSLAM.update: Pupd must be symmetric"
+        assert np.all(np.linalg.eigvals(Pupd) >= 0), "EKFSLAM.update: Pupd must be PSD"
 
         return etaupd, Pupd, NIS, a
+
+ 
 
     @classmethod
     def NEESes(cls, x: np.ndarray, P: np.ndarray, x_gt: np.ndarray,) -> np.ndarray:
